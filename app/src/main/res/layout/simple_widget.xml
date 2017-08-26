@@ -4,13 +4,27 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="@dimen/widget_margin"
-    android:background="#55000000">
+    android:background="@color/colorPrimaryDark">
+
+    <!--<CheckBox android:id="@+id/CheckBox01"
+        android:layout_width="0dp"
+        android:layout_weight=".1"
+        android:background="@color/colorPrimaryDark"
+        android:layout_height="match_parent"
+        android:checked="false"/>-->
+    
+    <ImageButton
+        android:id="@+id/toggleStar"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:src="@drawable/star"
+        android:background="@color/colorPrimaryDark"/>
 
     <TextView
         android:id="@+id/textView"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight=".7"
+        android:layout_weight=".6"
         android:gravity="center"
         android:text="000"
         android:textColor="#ffffff"
@@ -24,6 +38,6 @@
         android:layout_height="match_parent"
         android:layout_weight=".3"
         android:text="Next"
-        android:background="@color/colorPrimary"/>/>
+        android:background="@color/colorPrimary"/>
 
 </LinearLayout>
