@@ -1,30 +1,34 @@
 package focus.flashcardwidget;
 
-import android.Manifest;
-import android.app.Activity;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.widget.ImageButton;
+import android.util.Log;
 import android.widget.RemoteViews;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.io.Reader;
+import java.io.UnsupportedEncodingException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.Comparator;
 
 /**
  * Created by nealroessler on 8/16/17.
@@ -32,9 +36,11 @@ import java.util.Random;
 
 public class SimpleWidgetProvider extends AppWidgetProvider {
 
+    private static String TAG = "FLASHCARD_WIDGET";
     private static ArrayList<Flashcard> wordsList = new ArrayList<>();
     private static boolean firstTime = true;
-    private static int wordCount = 0;
+    private static int wordIndex = 0;
+    private static boolean starOnly = false;
     private static String buttonkey = "a";
 
 
@@ -42,13 +48,21 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
 
-        boolean star = true;
-
         if (firstTime == true) {
+
             firstTime = false;
             try {
-                wordsList = readFile();
-                Collections.shuffle(wordsList);
+                wordsList = readFile(context);
+                wordIndex = getWordIndex(context);
+                ArrayList<Integer> starsIndexes = getStarIndexes(context);
+
+                if (wordIndex >= wordsList.size() || Collections.max(starsIndexes) >= wordsList.size()) {
+                    wordIndex = 0;
+                    starsIndexes = new ArrayList<>();
+                }
+
+                setStars(starsIndexes);
+                //Collections.shuffle(wordsList);
             } catch (Exception e) {
                 throw new RuntimeException(e.getMessage());
             }
@@ -59,120 +73,219 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
 
 
         for (int i = 0; i < count; i++) {
+
+            RemoteViews remoteViews = new RemoteViews(context.getPackageName(), R.layout.simple_widget);
             int widgetId = appWidgetIds[i];
-            //String number = String.format("%03d", (new Random().nextInt(900) + 100));
-            Flashcard currentFlashcard;
-            if(wordsList.get(wordCount).isDisplayFront()) {
-                currentFlashcard = wordsList.get(wordCount);
-                
-                if ( buttonkey != null && buttonkey.equals("next")) {
-                    wordsList.get(wordCount).setDisplayFront(false);
-                }
-                //wordsList.remove(0)
-            } else {
 
-                if ( buttonkey != null && buttonkey.equals("next")) {
-                    wordCount++;
+            if (buttonkey != null && buttonkey.equals("staronly")) {
+                starOnly = !starOnly;
+                if (!isThereAtLeastOneStarredFlashcard(wordsList)) {
+                    starOnly = false;
+                    // Do a toast and say only can turn on when there are starred things
+                } else if (starOnly == true){
+                    flipAllToFront(wordsList);
+                    wordIndex = getNextStarOnList(wordIndex, wordsList, true);
+                } else {
+                    flipAllToFront(wordsList);
                 }
-
-                if(wordCount >= wordsList.size()) {
-                    flipToFront(wordsList);
-                    wordCount = 0;
-                }
-                currentFlashcard = wordsList.get(wordCount);
             }
 
-            String displayText = currentFlashcard.isDisplayFront() ? currentFlashcard.getFront() : currentFlashcard.getBack();
 
-            RemoteViews remoteViews = new RemoteViews(context.getPackageName(),
-                    R.layout.simple_widget);
-            remoteViews.setTextViewText(R.id.textView, displayText);
+            if ( buttonkey != null && buttonkey.equals("back")) {
+                if (wordsList.get(wordIndex).isDisplayFront()) {
 
+                    if (!starOnly) {
+                        wordIndex--;
+                    } else {
+                        wordIndex = getNextStarOnList(wordIndex, wordsList, false);
+                    }
 
+                    if(wordIndex <= 0) {
+                        flipAllToFront(wordsList);
+                        wordIndex = wordsList.size() -1;
+                    }
+                } else {
+                    // Flip to front if it is on back
+                    wordsList.get(wordIndex).setDisplayFront(true);
+                }
+            }
+
+            if ( buttonkey != null && buttonkey.equals("next")) {
+
+                // Flip to back if is front
+                if(wordsList.get(wordIndex).isDisplayFront()) {
+                    wordsList.get(wordIndex).setDisplayFront(false);
+                } else {
+
+                    if (!starOnly) {
+                        wordIndex++;
+                    } else {
+                        wordIndex = getNextStarOnList(wordIndex, wordsList, true);
+                    }
+
+                    if(wordIndex >= wordsList.size()) {
+                        flipAllToFront(wordsList);
+                        wordIndex = 0;
+                    }
+                }
+            }
+
+            // Set current flashcard!
+            Flashcard currentFlashcard = wordsList.get(wordIndex);
 
             if ( buttonkey != null && buttonkey.equals("star")) {
                 currentFlashcard.setStarred(!currentFlashcard.isStarred());
-                if (currentFlashcard.isStarred()) {
-                    remoteViews.setImageViewResource(R.id.toggleStar, R.drawable.staron);
-                } else {
-                    remoteViews.setImageViewResource(R.id.toggleStar, R.drawable.staroff);
+                try {
+                    saveStarInedexes(context);
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-
-                Intent intent = new Intent(context, SimpleWidgetProvider.class);
-
-                intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
-                intent.putExtra("buttonkey", "next");
-
-                PendingIntent pendingIntent = PendingIntent.getBroadcast(context,
-                        0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-
-                remoteViews.setOnClickPendingIntent(R.id.actionButton, pendingIntent);
-
-                // Register an onClickListener for 2nd button............
-                Intent intent2 = new Intent(context, SimpleWidgetProvider.class);
-
-                intent2.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-                intent2.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
-                intent2.putExtra("buttonkey", "star");
-
-                PendingIntent pendingIntent2 = PendingIntent.getBroadcast(context,
-                        1, intent2, PendingIntent.FLAG_UPDATE_CURRENT);
-
-                remoteViews.setOnClickPendingIntent(R.id.toggleStar, pendingIntent2);
-
-                appWidgetManager.updateAppWidget(widgetId, remoteViews);
-
-                return;
-
+                if (!isThereAtLeastOneStarredFlashcard(wordsList)) {
+                    starOnly = false;
+                    flipAllToFront(wordsList);
+                }
             }
 
-            // update star image regardless
+            // Update text
+            String displayText = currentFlashcard.isDisplayFront() ? currentFlashcard.getFront() : currentFlashcard.getBack();
+            remoteViews.setTextViewText(R.id.textView, displayText);
+
+            // Update star
             if (currentFlashcard.isStarred()) {
-                remoteViews.setImageViewResource(R.id.toggleStar, R.drawable.staron);
+                remoteViews.setImageViewResource(R.id.toggleStar, R.drawable.newstaron);
             } else {
-                remoteViews.setImageViewResource(R.id.toggleStar, R.drawable.staroff);
+                remoteViews.setImageViewResource(R.id.toggleStar, R.drawable.newstaroff);
             }
 
-//            Intent intent = new Intent(context, SimpleWidgetProvider.class);
-//            intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-//            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
-//            PendingIntent pendingIntent = PendingIntent.getBroadcast(context,
-//                    0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-//            remoteViews.setOnClickPendingIntent(R.id.actionButton, pendingIntent);
-//
-//
-//
-//
-//            remoteViews.setOnClickPendingIntent(R.id.toggleStar, pendingIntent);
-//            appWidgetManager.updateAppWidget(widgetId, remoteViews);
+            // Update staronly
+            if (starOnly) {
+                remoteViews.setImageViewResource(R.id.starsonly, R.drawable.newstaron);
+            } else {
+                remoteViews.setImageViewResource(R.id.starsonly, R.drawable.newstaroff);
+            }
 
-            // Register an onClickListener for 1st button
-            Intent intent = new Intent(context, SimpleWidgetProvider.class);
+            // Save word index
+            try {
+                saveWordIndex(context, wordIndex);
+            } catch (IOException e) {
+                Log.i(TAG, "Trouble Saving Word Index " + e);
+            }
 
-            intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
-            intent.putExtra("buttonkey", "next");
-
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(context,
-                    0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-
-            remoteViews.setOnClickPendingIntent(R.id.actionButton, pendingIntent);
-
-            // Register an onClickListener for 2nd button............
-            Intent intent2 = new Intent(context, SimpleWidgetProvider.class);
-
-            intent2.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-            intent2.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
-            intent2.putExtra("buttonkey", "star");
-
-            PendingIntent pendingIntent2 = PendingIntent.getBroadcast(context,
-                    1, intent2, PendingIntent.FLAG_UPDATE_CURRENT);
-
-            remoteViews.setOnClickPendingIntent(R.id.toggleStar, pendingIntent2);
-
-            appWidgetManager.updateAppWidget(widgetId, remoteViews);
+            registerOnclickListeners(context, appWidgetIds, remoteViews, appWidgetManager, widgetId);
         }
+    }
+
+    private boolean isThereAtLeastOneStarredFlashcard(ArrayList<Flashcard> flashcards) {
+        for (Flashcard flashcard : flashcards) {
+            if (flashcard.isStarred()) {
+                return  true;
+            }
+        }
+        return false;
+    }
+
+
+
+    private int getNextStarOnList(int wordCount, ArrayList<Flashcard> flashcards, boolean forwards) {
+        if (forwards) {
+            int counter = 0;
+            for (Flashcard flashcard : flashcards) {
+                Log.v(TAG, wordCount + " counter: " + counter);
+                if (flashcard.isStarred() && counter > wordCount) {
+                    return counter;
+                }
+                counter ++;
+            }
+
+            // if we made it this far the starred card must be up front
+            // Lets flip cards again
+            flipAllToFront(flashcards);
+            counter = 0;
+            for (Flashcard flashcard : flashcards) {
+                if (flashcard.isStarred()) {
+                    return counter;
+                }
+                counter ++;
+            }
+        } else {
+            int counter = flashcards.size()-1;
+            for (int i = flashcards.size()-1; i >= 0; i--) {
+                Flashcard flashcard = flashcards.get(i);
+                Log.v(TAG, wordCount + " counter: " + counter);
+                if (flashcard.isStarred() && counter < wordCount) {
+                    return counter;
+                }
+                counter --;
+            }
+
+            // if we made it this far the starred card must be up front
+            // Lets flip cards again
+            flipAllToFront(flashcards);
+            counter = flashcards.size()-1;
+            for (int i = flashcards.size()-1; i >= 0; i--) {
+                Flashcard flashcard = flashcards.get(i);
+                if (flashcard.isStarred()) {
+                    return counter;
+                }
+                counter --;
+            }
+        }
+
+        return -1;
+    }
+
+    private void registerOnclickListeners(Context context, int[] appWidgetIds, RemoteViews remoteViews, AppWidgetManager appWidgetManager, int widgetId) {
+        // Register an onClickListener for 1st button
+        Intent intent = new Intent(context, SimpleWidgetProvider.class);
+
+        intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+        intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
+        intent.putExtra("buttonkey", "next");
+
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context,
+                0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        remoteViews.setOnClickPendingIntent(R.id.forward, pendingIntent);
+
+        // Register an onClickListener for 2nd button............
+        Intent intent2 = new Intent(context, SimpleWidgetProvider.class);
+
+        intent2.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+        intent2.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
+        intent2.putExtra("buttonkey", "star");
+
+        PendingIntent pendingIntent2 = PendingIntent.getBroadcast(context,
+                1, intent2, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        remoteViews.setOnClickPendingIntent(R.id.toggleStar, pendingIntent2);
+
+
+        // Register an onClickListener for Third button............
+        Intent intent3 = new Intent(context, SimpleWidgetProvider.class);
+
+        intent3.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+        intent3.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
+        intent3.putExtra("buttonkey", "back");
+
+        PendingIntent pendingIntent3 = PendingIntent.getBroadcast(context,
+                2, intent3, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        remoteViews.setOnClickPendingIntent(R.id.back, pendingIntent3);
+
+
+        // Register an onClickListener for Fourth button............
+        Intent intent4 = new Intent(context, SimpleWidgetProvider.class);
+
+        intent4.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+        intent4.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
+        intent4.putExtra("buttonkey", "staronly");
+
+        PendingIntent pendingIntent4 = PendingIntent.getBroadcast(context,
+                3, intent4, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        remoteViews.setOnClickPendingIntent(R.id.starsonly, pendingIntent4);
+
+        appWidgetManager.updateAppWidget(widgetId, remoteViews);
     }
 
     @Override
@@ -188,18 +301,118 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
 
     }
 
-    private void flipToFront(ArrayList<Flashcard> cards) {
+    private void flipAllToFront(ArrayList<Flashcard> cards) {
         //cards.stream().map(card->card.setDisplayFront(true));
         for (Flashcard card : cards) {
             card.setDisplayFront(true);
         }
     }
 
-    private ArrayList<Flashcard> readFile() throws FileNotFoundException {
-        //--- Suppose you have input stream `is` of your csv file then:
+    private void setStars(ArrayList<Integer> starsIndexes) {
+        for (int i = 0; i < starsIndexes.size(); i++) {
+            wordsList.get(i).setStarred(true);
+        }
+    }
 
-        FileInputStream inputStream = new FileInputStream(new File("/sdcard/Flashcard/chinese-all.csv"));
-        //FileInputStream inputStream = new FileInputStream(new File("/sdcard/Flashcard/1000-popular-chinese"));
+    private void saveStarInedexes(Context context) throws IOException {
+        File file = new File(context.getFilesDir().toString() + "/star-index");
+        file.delete();
+
+        ArrayList<Integer> stars = new ArrayList<>();
+        for (int i = 0; i < wordsList.size(); i++) {
+            if(wordsList.get(i).isStarred()) {
+                stars.add(i);
+            }
+        }
+
+        //OutputStream outputStream = new ObjectOutputStream(new FileOutputStream(context.getFilesDir().toString() + "/star-index"));
+        //outputStream.w
+
+        Writer fileWriter = new FileWriter(context.getFilesDir().toString() + "/star-index");
+        for (Integer star : stars) {
+            fileWriter.write(star+"\n");
+        }
+        fileWriter.close();
+    }
+
+    private ArrayList<Integer> getStarIndexes(Context context) {
+        Log.i(TAG, "Start getStarIndexes");
+        Reader fileReader;
+        ArrayList<Integer> starIndexes = new ArrayList<>();
+        try {
+            fileReader = new FileReader(context.getFilesDir().toString() + "/star-index");
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+            //wordIndexString = bufferedReader.readLine();
+
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                starIndexes.add(Integer.valueOf(line));
+            }
+
+            fileReader.close();
+        } catch (Exception e) {
+            Log.i(TAG, "error getting word index " + e.toString());
+            return new ArrayList<>();
+        }
+
+        Log.i(TAG, "END getStarIndexes with - " + starIndexes);
+        return starIndexes;
+    }
+
+    private static void saveWordIndex(Context context, Integer currentWordIndex) throws IOException {
+        //FileOutputStream outputStream = new FileOutputStream(new File(context.getFilesDir().toString() + "/word-index"));
+        File file = new File(context.getFilesDir().toString() + "/word-index");
+        file.delete();
+
+        Writer fileWriter = new FileWriter(context.getFilesDir().toString() + "/word-index");
+        fileWriter.write("" + currentWordIndex);
+        fileWriter.close();
+    }
+
+
+    private int getWordIndex(Context context) throws IOException {
+
+        Log.i(TAG, "Start getWordIndex");
+        Reader fileReader;
+        String wordIndexString = "0";
+        try {
+            fileReader = new FileReader(context.getFilesDir().toString() + "/word-index");
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+            wordIndexString = bufferedReader.readLine();
+            fileReader.close();
+        } catch (Exception e) {
+            Log.i(TAG, "error getting word index " + e.toString());
+            return  0;
+        }
+
+        Log.i(TAG, "END getWordIndex with - " + wordIndexString);
+
+        return wordIndexString == null || !isNumeric(wordIndexString) ? 0 : new Integer(wordIndexString);
+    }
+
+    public static boolean isNumeric(String str) {
+        return str.matches("-?\\d+(\\.\\d+)?");  //match a number with optional '-' and decimal.
+    }
+
+    private ArrayList<Flashcard> readFile(Context context) throws FileNotFoundException {
+        Log.i("WIDGET FILE DIR", context.getFilesDir().toString());
+        //FileInputStream inputStream = new FileInputStream(new File(context.getFilesDir().toString() + "/chinese-test"));
+
+
+        InputStream inputStream;
+
+        if (new File(context.getFilesDir().toString() + "/" + MainActivity.CHOSENFILENAME).exists()) {
+            Log.i(TAG, context.getFilesDir().toString());
+            inputStream = new FileInputStream(new File(context.getFilesDir().toString() + "/" + MainActivity.CHOSENFILENAME));
+        } else if (new File(context.getFilesDir().toString() + "/" + MainActivity.DEFAULT_DEFINITIONS_FILENAME).exists()) {
+            Log.i(TAG, context.getFilesDir().toString());
+            inputStream = new FileInputStream(new File(context.getFilesDir().toString() + "/" + MainActivity.DEFAULT_DEFINITIONS_FILENAME));
+        } else {
+            // No file exist, create DEFAULT
+            Log.i(TAG, context.getFilesDir().toString());
+            String string = MainActivity.getIntegratedChinese();
+            inputStream = new ByteArrayInputStream(string.getBytes());
+        }
 
         ArrayList<Flashcard> words = new ArrayList<>();
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
@@ -231,6 +444,15 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
         return words;
     }
 
+
+    public static void reset(Context context) {
+        try {
+            saveWordIndex(context, 0);
+            //reset stars
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
 }
 

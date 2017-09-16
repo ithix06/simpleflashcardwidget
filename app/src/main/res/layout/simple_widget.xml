@@ -1,43 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--https://material.io/icons/-->
+
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="horizontal"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="@dimen/widget_margin"
-    android:background="@color/colorPrimaryDark">
+    android:background="#88676767">
 
-    <!--<CheckBox android:id="@+id/CheckBox01"
-        android:layout_width="0dp"
-        android:layout_weight=".1"
-        android:background="@color/colorPrimaryDark"
-        android:layout_height="match_parent"
-        android:checked="false"/>-->
-    
     <ImageButton
-        android:id="@+id/toggleStar"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
-        android:src="@drawable/star"
-        android:background="@color/colorPrimaryDark"/>
+        android:id="@+id/starsonly"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/newstaroff"
+        android:background="@android:color/transparent"/>
 
     <TextView
         android:id="@+id/textView"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight=".6"
+        android:layout_weight=".7"
         android:gravity="center"
         android:text="000"
         android:textColor="#ffffff"
-        android:textSize="@dimen/abc_text_size_display_3_material"
+        android:textSize="@dimen/abc_text_size_display_1_material"
         android:textStyle="bold"
-        android:background="@color/colorPrimaryDark"/>
+        android:background="@android:color/transparent"/>
 
-    <Button
-        android:id="@+id/actionButton"
-        android:layout_width="0dp"
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="130dp"
         android:layout_height="match_parent"
-        android:layout_weight=".3"
-        android:text="Next"
-        android:background="@color/colorPrimary"/>
+        android:padding="@dimen/widget_margin"
+        android:background="@android:color/transparent">
+
+        <ImageButton
+            android:id="@+id/forward"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:textColor="#ffffff"
+            android:layout_weight=".3"
+            android:src="@drawable/forward"
+            android:background="@android:color/transparent"/>/>
+
+        <ImageButton
+            android:id="@+id/back"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight=".3"
+            android:textColor="#ffffff"
+            android:src="@drawable/back"
+            android:background="@android:color/transparent"/>/>
+
+        <ImageButton
+            android:id="@+id/toggleStar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight=".3"
+            android:textColor="#ffffff"
+            android:src="@drawable/newstaroff"
+            android:background="@android:color/transparent"/>/>
+
+    </LinearLayout>
 
 </LinearLayout>
