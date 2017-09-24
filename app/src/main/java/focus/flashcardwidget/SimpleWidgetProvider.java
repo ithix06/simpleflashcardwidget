@@ -14,21 +14,15 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 
 /**
  * Created by nealroessler on 8/16/17.
@@ -43,8 +37,6 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
     private static boolean starOnly = false;
     private static String buttonkey = "a";
 
-
-
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
 
@@ -56,10 +48,10 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
                 wordIndex = getWordIndex(context);
                 ArrayList<Integer> starsIndexes = getStarIndexes(context);
 
-                if (wordIndex >= wordsList.size() || Collections.max(starsIndexes) >= wordsList.size()) {
-                    wordIndex = 0;
-                    starsIndexes = new ArrayList<>();
-                }
+//                if (wordIndex >= wordsList.size() || Collections.max(starsIndexes) >= wordsList.size()) {
+//                    wordIndex = 0;
+//                    starsIndexes = new ArrayList<>();
+//                }
 
                 setStars(starsIndexes);
                 //Collections.shuffle(wordsList);
@@ -149,6 +141,12 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
             // Update text
             String displayText = currentFlashcard.isDisplayFront() ? currentFlashcard.getFront() : currentFlashcard.getBack();
             remoteViews.setTextViewText(R.id.textView, displayText);
+            if (currentFlashcard.isDisplayFront()) {
+                remoteViews.setFloat(R.id.textView, "setTextSize", 44);
+            } else {
+                remoteViews.setFloat(R.id.textView, "setTextSize", 24);
+            }
+
 
             // Update star
             if (currentFlashcard.isStarred()) {
@@ -183,8 +181,6 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
         }
         return false;
     }
-
-
 
     private int getNextStarOnList(int wordCount, ArrayList<Flashcard> flashcards, boolean forwards) {
         if (forwards) {
@@ -308,13 +304,19 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
         }
     }
 
+    private static void resetStars(ArrayList<Flashcard> cards) {
+        for (Flashcard card : cards) {
+            card.setStarred(false);
+        }
+    }
+
     private void setStars(ArrayList<Integer> starsIndexes) {
         for (int i = 0; i < starsIndexes.size(); i++) {
             wordsList.get(i).setStarred(true);
         }
     }
 
-    private void saveStarInedexes(Context context) throws IOException {
+    private static void saveStarInedexes(Context context) throws IOException {
         File file = new File(context.getFilesDir().toString() + "/star-index");
         file.delete();
 
@@ -445,10 +447,18 @@ public class SimpleWidgetProvider extends AppWidgetProvider {
     }
 
 
-    public static void reset(Context context) {
+    public static void reset(Context context, String flashcardSet) {
         try {
-            saveWordIndex(context, 0);
-            //reset stars
+            if (wordsList != null) {
+                firstTime = true;
+                saveWordIndex(context, 0);
+                //reset stars
+                resetStars(wordsList);
+                saveStarInedexes(context);
+
+                RemoteViews remoteViews = new RemoteViews(context.getPackageName(), R.layout.simple_widget);
+                remoteViews.setTextViewText(R.id.textView, flashcardSet);
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
